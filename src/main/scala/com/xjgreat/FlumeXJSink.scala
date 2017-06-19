@@ -1,3 +1,6 @@
+package com.xjgreat
+
+
 import java.io.{BufferedOutputStream, File, FileOutputStream, IOException}
 import java.util.Properties
 
@@ -18,7 +21,7 @@ import org.slf4j.{Logger, LoggerFactory}
   * Created by wanggang on 2017/6/15.
   */
 class FlumeXJSink extends AbstractSink with Configurable {
-  val logger: Logger = LoggerFactory.getLogger("FlumeXJSink")
+  val logger: Logger = LoggerFactory.getLogger("com.xjgreat.FlumeXJSink")
   //基本配置变量
   var batchSize = 100
   var currentFilename: String = _
@@ -124,7 +127,7 @@ class FlumeXJSink extends AbstractSink with Configurable {
   }
 
   override def start(): Unit = {
-    logger.info("Start FlumeXJSink sink")
+    logger.info("Start com.xjgreat.FlumeXJSink sink")
     sinkCounter.start()
     super.start()
 
