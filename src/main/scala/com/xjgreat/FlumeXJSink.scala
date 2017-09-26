@@ -48,7 +48,6 @@ class FlumeXJSink extends AbstractSink with Configurable {
   var HDFSPath: String = _
   var fs: FileSystem = _
   var isCompress: Boolean = _
-  val serializerType = "TEXT"
   //kafkasink配置参数
   var toKafka: Boolean = _
   var topics: Array[String] = _
