@@ -16,6 +16,7 @@ import org.apache.hadoop.io.compress.{CompressionCodecFactory, CompressionOutput
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.joda.time.DateTime
 import org.slf4j.{Logger, LoggerFactory}
+import scala.collection.JavaConverters._
 
 /**
   * Created by wanggang on 2017/6/15.
@@ -53,6 +54,10 @@ class FlumeXJSink extends AbstractSink with Configurable {
   var topics: Array[String] = _
   var brokers: String = _
   var producer: KafkaProducer[String, String] = _
+
+  //是否写入head-key对应的内容
+  var isWriteHeader: Boolean = false
+  var headerKey: String = _
 
   var outputStream: BufferedOutputStream = _
   var hdfsOutputStream: FSDataOutputStream = _
@@ -111,6 +116,12 @@ class FlumeXJSink extends AbstractSink with Configurable {
       val partitions = context.getInteger("partitions", 4)
       kafkaProps.put("num.partitions", partitions.toString)
       producer = new KafkaProducer[String, String](kafkaProps)
+    }
+
+    isWriteHeader = context.getInteger("isWriteHeader", 0) == 1
+    if (isWriteHeader) {
+      val headerKey = context.getString("headerKey")
+      Preconditions.checkNotNull(headerKey, "headerKey is required".asInstanceOf[Any])
     }
 
     rollTimeType = context.getString("rollTimeType")
@@ -250,25 +261,23 @@ class FlumeXJSink extends AbstractSink with Configurable {
         while (runCount < batchSize) {
           val event = channel.take()
           if (event != null) {
-            if (inputCharset == "UTF-8") {
-              outputStream.write(event.getBody)
-              if (toKafka) {
-                topics.foreach { t =>
-                  val record = new ProducerRecord[String, String](t, new String(event.getBody))
-                  producer.send(record)
-                }
+
+            val bodyString =
+              if (isWriteHeader) {
+                val eh = event.getHeaders.asScala
+                new String(event.getBody, inputCharset) + "," + eh.getOrElse(headerKey, "")
+              } else {
+                new String(event.getBody, inputCharset)
               }
-            } else {
-              val bodyString = new String(event.getBody, inputCharset)
-              val body = bodyString.getBytes("UTF-8")
-              outputStream.write(body)
-              if (toKafka) {
-                topics.foreach { t =>
-                  val record = new ProducerRecord[String, String](t, bodyString)
-                  producer.send(record)
-                }
+            val body = bodyString.getBytes("UTF-8")
+            outputStream.write(body)
+            if (toKafka) {
+              topics.foreach { t =>
+                val record = new ProducerRecord[String, String](t, bodyString)
+                producer.send(record)
               }
             }
+
             outputStream.write("\n".getBytes())
             processCount += 1
           }
@@ -281,25 +290,24 @@ class FlumeXJSink extends AbstractSink with Configurable {
         while (runCount < batchSize) {
           val event = channel.take()
           if (event != null) {
-            if (inputCharset == "UTF-8") {
-              hdfsOutputStream.write(event.getBody)
-              if (toKafka) {
-                topics.foreach { t =>
-                  val record = new ProducerRecord[String, String](t, new String(event.getBody))
-                  producer.send(record)
-                }
+
+            val bodyString =
+              if (isWriteHeader) {
+                val eh = event.getHeaders.asScala
+                new String(event.getBody, inputCharset) + "," + eh.getOrElse(headerKey, "")
+              } else {
+                new String(event.getBody, inputCharset)
               }
-            } else {
-              val bodyString = new String(event.getBody, inputCharset)
-              val body = bodyString.getBytes("UTF-8")
-              hdfsOutputStream.write(body)
-              if (toKafka) {
-                topics.foreach { t =>
-                  val record = new ProducerRecord[String, String](t, bodyString)
-                  producer.send(record)
-                }
+            val body = bodyString.getBytes("UTF-8")
+
+            hdfsOutputStream.write(body)
+            if (toKafka) {
+              topics.foreach { t =>
+                val record = new ProducerRecord[String, String](t, bodyString)
+                producer.send(record)
               }
             }
+
             hdfsOutputStream.write("\n".getBytes())
             processCount += 1
           }
@@ -312,25 +320,22 @@ class FlumeXJSink extends AbstractSink with Configurable {
         while (runCount < batchSize) {
           val event = channel.take()
           if (event != null) {
-            if (inputCharset == "UTF-8") {
-              hdfsCompressOutputStream.write(event.getBody)
-              if (toKafka) {
-                topics.foreach { t =>
-                  val record = new ProducerRecord[String, String](t, new String(event.getBody))
-                  producer.send(record)
-                }
+            val bodyString =
+              if (isWriteHeader) {
+                val eh = event.getHeaders.asScala
+                new String(event.getBody, inputCharset) + "," + eh.getOrElse(headerKey, "")
+              } else {
+                new String(event.getBody, inputCharset)
               }
-            } else {
-              val bodyString = new String(event.getBody, inputCharset)
-              val body = bodyString.getBytes("UTF-8")
-              hdfsCompressOutputStream.write(body)
-              if (toKafka) {
-                topics.foreach { t =>
-                  val record = new ProducerRecord[String, String](t, bodyString)
-                  producer.send(record)
-                }
+            val body = bodyString.getBytes("UTF-8")
+            hdfsCompressOutputStream.write(body)
+            if (toKafka) {
+              topics.foreach { t =>
+                val record = new ProducerRecord[String, String](t, bodyString)
+                producer.send(record)
               }
             }
+
             hdfsCompressOutputStream.write("\n".getBytes())
             processCount += 1
           }
